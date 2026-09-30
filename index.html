@@ -88,8 +88,8 @@
       { num: 2, html: '<span class="kw">const</span> <span class="vr">goku</span> = <span class="kw">new</span> <span class="fn">Saiyan</span>(<span class="str">"Son Goku"</span>);', start: 0, end: 4 },
       { num: 3, html: '<span class="kw">const</span> <span class="vr">frieza</span> = <span class="kw">new</span> <span class="fn">Tyrant</span>(<span class="str">"Frieza"</span>);', start: 4, end: 8 },
       { num: 4, html: '' },
-      { num: 5, html: '<span class="kw">await</span> <span class="vr">goku</span>.<span class="fn">transform</span>(<span class="str">"Super Saiyan 1"</span>);', start: 8, end: 12, action: 'ssj_aura' },
-      { num: 6, html: '<span class="kw">await</span> <span class="vr">frieza</span>.<span class="fn">powerUp</span>(<span class="str">"100% Full Power"</span>);', start: 12, end: 16, action: 'frieza_aura' },
+      { num: 5, html: '<span class="kw">await</span> <span class="vr">goku</span>.<span class="fn">transform</span>(<span class="str">"Super Saiyan 1"</span>);', start: 8, end: 12, action: 'ssj_aura', goku: 'A... A... A...!!!' },
+      { num: 6, html: '<span class="kw">await</span> <span class="vr">frieza</span>.<span class="fn">powerUp</span>(<span class="str">"100% Full Power"</span>);', start: 12, end: 16, action: 'frieza_aura', frieza: 'FUUU...!!!' },
       { num: 7, html: '' },
       { num: 8, html: '<span class="vr">goku</span>.<span class="fn">say</span>(<span class="str">"Ngươi đã giết Krillin!!"</span>);', start: 16, end: 20, goku: 'Ngươi đã giết Krillin!!' },
       { num: 9, html: '<span class="vr">frieza</span>.<span class="fn">say</span>(<span class="str">"Ta sẽ hủy diệt cả hành tinh này!"</span>);', start: 20, end: 24, frieza: 'Ta sẽ hủy diệt cả hành tinh này!' },
@@ -100,8 +100,8 @@
       { num: 14, html: '  <span class="vr">frieza</span>.<span class="fn">counterAttack</span>();', start: 38, end: 44, action: 'frieza_attack' },
       { num: 15, html: '' },
       { num: 16, html: '  <span class="kw">if</span> (<span class="vr">goku</span>.<span class="vr">rage</span> >= <span class="num">100</span>) {', start: 44, end: 48 },
-      { num: 17, html: '    <span class="vr">goku</span>.<span class="fn">cast</span>(<span class="str">"KAMEHAMEHA"</span>);', start: 48, end: 55, action: 'kamehameha', goku: 'KAME... HAME... HA!' },
-      { num: 18, html: '    <span class="vr">frieza</span>.<span class="fn">cast</span>(<span class="str">"DEATH BALL"</span>);', start: 55, end: 60, action: 'death_ball', frieza: 'Chết đi con khỉ!!' },
+      { num: 17, html: '    <span class="vr">goku</span>.<span class="fn">cast</span>(<span class="str">"KAMEHAMEHA"</span>);', start: 48, end: 55, action: 'goku_charge', goku: 'KAME... HAME...' },
+      { num: 18, html: '    <span class="vr">frieza</span>.<span class="fn">cast</span>(<span class="str">"DEATH BALL"</span>);', start: 55, end: 60, action: 'dual_charge', frieza: 'Chết đi con khỉ!!' },
       { num: 19, html: '    <span class="kw">await</span> <span class="fn">beamStruggle</span>();', start: 60, end: 72, action: 'beam_struggle' },
       { num: 20, html: '  }', start: 72, end: 74 },
       { num: 21, html: '}' },
@@ -207,28 +207,66 @@
       }
     }
 
+    function drawChargeSphere(x, y, color, time, intensity) {
+      const pulse = 1 + Math.sin(time * 15) * 0.14;
+      const radius = (5 + intensity * 4) * pulse;
+      const glow = ctx.createRadialGradient(x, y, 1, x, y, radius * 2.8);
+      glow.addColorStop(0, '#fff');
+      glow.addColorStop(0.24, color.replace('ALPHA', '0.95'));
+      glow.addColorStop(0.58, color.replace('ALPHA', '0.4'));
+      glow.addColorStop(1, color.replace('ALPHA', '0'));
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(x, y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = color.replace('ALPHA', '0.9');
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(x, y, radius, time * 2, time * 2 + Math.PI * 1.65); ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(x, y, radius * 0.36, 0, Math.PI * 2); ctx.fill();
+      for (let spark = 0; spark < 4; spark++) {
+        const angle = time * 4 + spark * Math.PI / 2;
+        const distance = radius * (1.5 + (spark % 2) * 0.35);
+        ctx.fillStyle = color.replace('ALPHA', '0.95');
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(angle) * distance, y + Math.sin(angle) * distance, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     function drawGoku(x, y, pose, time, transformation) {
       const firing = pose === 'kamehameha' || pose === 'beam_struggle';
       const lunging = pose === 'combat_dash' || pose === 'combat_clash';
+      const charging = pose === 'goku_charge' || pose === 'dual_charge';
       ctx.save();
-      ctx.translate(x, y + Math.sin(time * 2.1) * 3);
-      ctx.rotate(lunging ? Math.sin(time * 8) * 0.13 : Math.sin(time * 2) * 0.025);
+      ctx.translate(x, y + Math.sin(time * 2.1) * 3 + (charging ? 4 : 0));
+      ctx.rotate(charging ? 0.18 : lunging ? Math.sin(time * 8) * 0.13 : Math.sin(time * 2) * 0.025);
 
-      if (pose === 'ssj_aura' || firing || pose === 'combat_clash') {
+      if (pose === 'ssj_aura' || charging || firing || pose === 'combat_clash') {
         const auraColor = pose === 'ssj_aura'
           ? blendColor([243, 249, 255], [255, 214, 48], transformation)
           : 'rgba(255,214,48,ALPHA)';
-        drawAura(0, 0, auraColor, time, firing ? 1 : 0.45);
+        drawAura(0, 0, auraColor, time, firing ? 1 : charging ? 0.7 : 0.45);
       }
 
       const stride = lunging ? Math.sin(time * 14) * 5 : Math.sin(time * 3) * 1.5;
-      drawLimb(-5, 15, -12 - stride, 27, '#1769aa', 5);
-      drawLimb(5, 15, 10 + stride, 26, '#1769aa', 5);
+      if (charging) {
+        drawLimb(-5, 15, -13, 22, '#1769aa', 5);
+        drawLimb(-13, 22, -7, 28, '#1769aa', 5);
+        drawLimb(5, 15, 12, 22, '#1769aa', 5);
+        drawLimb(12, 22, 7, 28, '#1769aa', 5);
+      } else {
+        drawLimb(-5, 15, -12 - stride, 27, '#1769aa', 5);
+        drawLimb(5, 15, 10 + stride, 26, '#1769aa', 5);
+      }
       ctx.fillStyle = '#162d47';
       ctx.beginPath(); ctx.ellipse(-12 - stride, 29, 6, 3, -0.15, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(10 + stride, 28, 6, 3, 0.1, 0, Math.PI * 2); ctx.fill();
 
-      if (firing) {
+      if (charging) {
+        drawLimb(5, -5, 13, -3, '#f2bb8e', 5);
+        drawLimb(13, -3, 18, -1, '#f2bb8e', 5);
+        drawLimb(3, 3, 12, 6, '#f2bb8e', 5);
+        drawLimb(12, 6, 18, 4, '#f2bb8e', 5);
+      } else if (firing) {
         drawLimb(5, -5, 23, -5 + Math.sin(time * 4) * 1.5, '#f2bb8e', 5);
         drawLimb(3, 3, 20, 1 + Math.sin(time * 4) * 1.5, '#f2bb8e', 5);
       } else if (lunging) {
@@ -251,6 +289,7 @@
       ctx.fillRect(2, 17, 7, 4);
       ctx.fillStyle = '#164d82';
       ctx.beginPath(); ctx.roundRect(-10, -11, 20, 5, 2); ctx.fill();
+      if (charging) drawChargeSphere(21, 1, 'rgba(90,210,255,ALPHA)', time, 0.85);
 
       ctx.fillStyle = '#f4c59d';
       ctx.beginPath(); ctx.moveTo(-5, -21); ctx.lineTo(7, -23); ctx.lineTo(11, -17); ctx.lineTo(9, -11); ctx.lineTo(2, -8); ctx.lineTo(-4, -12); ctx.closePath(); ctx.fill();
@@ -278,18 +317,19 @@
 
     function drawFrieza(x, y, pose, time, transformation) {
       const casting = pose === 'death_ball' || pose === 'frieza_attack' || pose === 'beam_struggle';
+      const charging = pose === 'dual_charge';
       const armor = 1 - transformation;
       ctx.save();
-      ctx.translate(x, y + Math.cos(time * 2.1) * 3);
+      ctx.translate(x, y + Math.cos(time * 2.1) * 3 + (charging ? 4 : 0));
       ctx.scale(-1, 1);
       ctx.scale(1 + transformation * 0.22, 1 + transformation * 0.04);
-      ctx.rotate(pose === 'frieza_attack' ? -0.08 : Math.sin(time * 2 + 1) * 0.02);
+      ctx.rotate(charging ? 0.18 : pose === 'frieza_attack' ? -0.08 : Math.sin(time * 2 + 1) * 0.02);
 
-      if (pose === 'frieza_aura' || casting || pose === 'combat_clash') {
+      if (pose === 'frieza_aura' || charging || casting || pose === 'combat_clash') {
         const auraColor = pose === 'frieza_aura'
           ? blendColor([244, 248, 255], [190, 64, 255], transformation)
           : 'rgba(190,64,255,ALPHA)';
-        drawAura(0, 0, auraColor, time + 0.7, casting ? 0.9 : 0.4);
+        drawAura(0, 0, auraColor, time + 0.7, casting ? 0.9 : charging ? 0.7 : 0.4);
       }
 
       ctx.strokeStyle = '#e8edf7'; ctx.lineWidth = 4; ctx.lineCap = 'round';
@@ -297,13 +337,25 @@
       ctx.fillStyle = '#f5f6ff'; ctx.beginPath(); ctx.ellipse(-12 + Math.sin(time * 2) * 4, 34, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
 
       const stride = Math.sin(time * (pose === 'combat_dash' ? 14 : 3)) * (pose === 'combat_dash' ? 5 : 1);
-      drawLimb(-5, 13, -9 - stride, 26, '#f1f2ff', 4.5);
-      drawLimb(5, 13, 10 + stride, 25, '#f1f2ff', 4.5);
+      if (charging) {
+        drawLimb(-5, 13, -12, 21, '#f1f2ff', 4.5);
+        drawLimb(-12, 21, -7, 26, '#f1f2ff', 4.5);
+        drawLimb(5, 13, 12, 21, '#f1f2ff', 4.5);
+        drawLimb(12, 21, 7, 25, '#f1f2ff', 4.5);
+      } else {
+        drawLimb(-5, 13, -9 - stride, 26, '#f1f2ff', 4.5);
+        drawLimb(5, 13, 10 + stride, 25, '#f1f2ff', 4.5);
+      }
       ctx.fillStyle = '#a749d0';
       ctx.beginPath(); ctx.ellipse(-10 - stride, 27, 5, 2.5, -0.15, 0, Math.PI * 2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(10 + stride, 26, 5, 2.5, 0.1, 0, Math.PI * 2); ctx.fill();
 
-      if (casting) {
+      if (charging) {
+        drawLimb(5, -5, 13, -3, '#f0c8d9', 4.5);
+        drawLimb(13, -3, 18, -1, '#f0c8d9', 4.5);
+        drawLimb(3, 2, 12, 6, '#f0c8d9', 4.5);
+        drawLimb(12, 6, 18, 4, '#f0c8d9', 4.5);
+      } else if (casting) {
         drawLimb(5, -5, 22, -9, '#f0c8d9', 4.5);
         drawLimb(3, 2, 18, -2, '#f0c8d9', 4.5);
       } else if (pose === 'combat_dash') {
@@ -321,6 +373,10 @@
       ctx.beginPath(); ctx.ellipse(0, 2, 5.5, 9, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#c351ef';
       ctx.beginPath(); ctx.ellipse(0, -3, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+      if (charging) {
+        const sphereColor = blendColor([244, 248, 255], [190, 64, 255], transformation);
+        drawChargeSphere(21, 1, sphereColor, time + 0.7, 0.9);
+      }
 
       if (armor > 0.02) {
         ctx.save();
@@ -416,14 +472,6 @@
       ctx.save();
       const shake = currentAction === 'beam_struggle' ? 2.5 : currentAction === 'combat_clash' ? 1.7 : currentAction === 'combat_dash' ? 0.7 : 0;
       ctx.translate(Math.sin(time * 37) * shake, Math.cos(time * 43) * shake * 0.6);
-      if (currentAction === 'ssj_aura' || currentAction === 'frieza_aura') {
-        const focusX = currentAction === 'ssj_aura' ? 54 : 266;
-        const zoom = 1 + Math.sin((currentAction === 'ssj_aura' ? gokuProgress : friezaProgress) * Math.PI) * 0.42;
-        ctx.translate(sceneWidth / 2, sceneHeight * 0.48);
-        ctx.scale(zoom, zoom);
-        ctx.translate(-focusX, -sceneHeight * 0.48);
-      }
-
       const sky = ctx.createLinearGradient(0, 0, 0, horizon + 30);
       sky.addColorStop(0, '#060b14'); sky.addColorStop(0.52, '#17252d'); sky.addColorStop(0.82, '#543026'); sky.addColorStop(1, '#a04e2c');
       ctx.fillStyle = sky; ctx.fillRect(0, 0, sceneWidth, sceneHeight);
@@ -536,8 +584,25 @@
         ctx.fillStyle = impact; ctx.beginPath(); ctx.arc(160, gokuY - 5, 38, 0, Math.PI * 2); ctx.fill();
       }
 
-      drawGoku(gokuX, gokuY, currentAction, time, gokuEase);
-      drawFrieza(friezaX, friezaY, currentAction, time, friezaEase);
+      const gokuFocus = Math.sin(gokuEase * Math.PI);
+      const gokuZoom = 1 + gokuFocus * 0.58;
+      const gokuDisplayX = gokuX + (sceneWidth / 2 - gokuX) * gokuFocus;
+      ctx.save();
+      ctx.translate(gokuDisplayX, gokuY);
+      ctx.scale(currentAction === 'ssj_aura' ? gokuZoom : 1, currentAction === 'ssj_aura' ? gokuZoom : 1);
+      ctx.translate(-gokuDisplayX, -gokuY);
+      drawGoku(gokuDisplayX, gokuY, currentAction, time, gokuEase);
+      ctx.restore();
+
+      const friezaFocus = Math.sin(friezaEase * Math.PI);
+      const friezaZoom = 1 + friezaFocus * 0.58;
+      const friezaDisplayX = friezaX + (sceneWidth / 2 - friezaX) * friezaFocus;
+      ctx.save();
+      ctx.translate(friezaDisplayX, friezaY);
+      ctx.scale(currentAction === 'frieza_aura' ? friezaZoom : 1, currentAction === 'frieza_aura' ? friezaZoom : 1);
+      ctx.translate(-friezaDisplayX, -friezaY);
+      drawFrieza(friezaDisplayX, friezaY, currentAction, time, friezaEase);
+      ctx.restore();
 
       if (currentAction === 'kamehameha') {
         drawBeam(gokuX + 23, friezaX - 16, gokuY - 5, 'kame', time);
@@ -612,9 +677,20 @@
     }
 
     audio.addEventListener('timeupdate', () => updateBattle(audio.currentTime));
-    audio.addEventListener('error', () => { fallbackMode = true; });
+    audio.addEventListener('error', () => {
+      fallbackMode = true;
+      updateBattle(fallbackTime);
+    });
+
+    function stopFallback() {
+      if (fallbackTimer !== null) {
+        window.clearInterval(fallbackTimer);
+        fallbackTimer = null;
+      }
+    }
 
     function startFallback() {
+      if (fallbackTimer !== null) return;
       if (fallbackTime >= 80) {
         fallbackTime = 0;
         updateBattle(fallbackTime);
@@ -629,19 +705,28 @@
       }, 100);
     }
 
+    function playAudio() {
+      if (fallbackMode || audio.error) audio.load();
+      audio.play().then(() => {
+        stopFallback();
+        fallbackMode = false;
+        fallbackTime = audio.currentTime;
+        updateBattle(audio.currentTime);
+      }).catch(() => {
+        fallbackMode = true;
+        startFallback();
+      });
+    }
+
     function togglePlayback() {
       if (fallbackMode) {
         if (fallbackTimer !== null) {
-          window.clearInterval(fallbackTimer);
-          fallbackTimer = null;
+          stopFallback();
         } else {
-          startFallback();
+          playAudio();
         }
       } else if (audio.paused) {
-        audio.play().catch(() => {
-          fallbackMode = true;
-          startFallback();
-        });
+        playAudio();
       } else {
         audio.pause();
       }
