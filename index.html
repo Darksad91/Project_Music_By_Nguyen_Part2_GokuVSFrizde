@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goku vs Frieza - Epic Code Fight</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0b0c10; display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; font-family: 'Fira Code', monospace; color: #e0e0e0;
+    }
+    .app-container {
+      width: 100vw; max-width: 420px; height: 100vh; max-height: 880px;
+      background: #181a1f; display: flex; flex-direction: column;
+      position: relative; overflow: hidden; border-radius: 12px; box-shadow: 0 0 40px rgba(255, 165, 0, 0.2);
+    }
+    
+    /* --- SCENE TRẬN CHIẾN (NỬA TRÊN) --- */
+    .scene-view {
+      position: relative; width: 100%; height: 40%;
+      background: #4a752c; /* Bầu trời Namek xanh lá */
+      overflow: hidden; border-bottom: 3px solid #ff9800;
+    }
+    canvas#pixelCanvas { display: block; width: 100%; height: 100%; image-rendering: auto; }
+    
+    .bubble {
+      position: absolute; background: #fff; color: #000; padding: 6px 8px;
+      font-size: 10px; font-weight: bold; border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5); opacity: 0; transition: 0.1s; pointer-events: none;
+      font-family: 'Press Start 2P', cursive; text-transform: uppercase; line-height: 1.4;
+      max-width: 150px; text-align: center;
+    }
+    .bubble.show { opacity: 1; transform: scale(1); }
+    #bubbleGoku { top: 15%; left: 10%; border: 2px solid #ff9800; }
+    #bubbleFrieza { top: 15%; right: 10%; border: 2px solid #9c27b0; }
+
+    /* --- TRÌNH DUYỆT CODE (NỬA DƯỚI) --- */
+    .editor-view { width: 100%; height: 60%; background: #1e1e24; display: flex; flex-direction: column; }
+    .editor-header { padding: 12px; font-size: 13px; border-bottom: 1px solid #282a36; }
+    .title { color: #e5c07b; font-weight: bold; }
+    .marquee { color: #abb2bf; font-size: 11px; }
+    
+    .code-body { flex: 1; overflow-y: hidden; padding: 8px 0; font-size: 13px; line-height: 1.7; }
+    .code-line { display: flex; align-items: center; padding: 0 16px; white-space: pre; position: relative; }
+    .code-line.active { background-color: rgba(229, 192, 123, 0.15); }
+    .code-line .line-num { width: 28px; color: #5c6370; text-align: right; margin-right: 14px; font-size: 12px; }
+    .code-line .pointer { position: absolute; left: 18px; color: #e5c07b; display: none; }
+    .code-line.active .pointer { display: inline-block; }
+
+    /* Syntax Highlighting */
+    .kw { color: #c678dd; font-weight: 600; }  
+    .fn { color: #61afef; }                     
+    .vr { color: #e06c75; }                     
+    .str { color: #98c379; }                    
+    .num { color: #d19a66; }                    
+    
+    .editor-footer { padding: 10px 16px; font-size: 11px; background: #111217; color: #828997; cursor: pointer; text-align: center;}
+    .editor-footer:hover { color: #fff; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <div class="scene-view">
+      <canvas id="pixelCanvas"></canvas>
+      <div id="bubbleGoku" class="bubble"></div>
+      <div id="bubbleFrieza" class="bubble"></div>
+    </div>
+
+    <div class="editor-view">
+      <div class="editor-header">
+        <span class="title">namek_battle.js</span>
+        <span class="marquee"> • Target: Survive • Music: Awake and Alive</span>
+      </div>
+      <div class="code-body" id="codeContainer"></div>
+      <div class="editor-footer" id="playBtn">▶ BẤM ĐỂ BẮT ĐẦU TRẬN CHIẾN (Phím SPACE) <br><span id="timeTracker">0:00 / 1:20</span></div>
+    </div>
+  </div>
+
+  <audio id="audioTrack" src="awake_and_alive.mp3" preload="auto"></audio>
+
+  <script>
+    // 1. KỊCH BẢN CODE VÀ THỜI GIAN (Điều chỉnh start/end để khớp với beat nhạc)
+    const codeLines = [
+      { num: 1, html: '<span class="kw">import</span> { Saiyan, Tyrant } <span class="kw">from</span> <span class="str">"namek-core"</span>;' },
+      { num: 2, html: '<span class="kw">const</span> <span class="vr">goku</span> = <span class="kw">new</span> <span class="fn">Saiyan</span>(<span class="str">"Son Goku"</span>);', start: 0, end: 4 },
+      { num: 3, html: '<span class="kw">const</span> <span class="vr">frieza</span> = <span class="kw">new</span> <span class="fn">Tyrant</span>(<span class="str">"Frieza"</span>);', start: 4, end: 8 },
+      { num: 4, html: '' },
+      { num: 5, html: '<span class="kw">await</span> <span class="vr">goku</span>.<span class="fn">transform</span>(<span class="str">"Super Saiyan 1"</span>);', start: 8, end: 12, action: 'ssj_aura' },
+      { num: 6, html: '<span class="kw">await</span> <span class="vr">frieza</span>.<span class="fn">powerUp</span>(<span class="str">"100% Full Power"</span>);', start: 12, end: 16, action: 'frieza_aura' },
+      { num: 7, html: '' },
+      { num: 8, html: '<span class="vr">goku</span>.<span class="fn">say</span>(<span class="str">"Ngươi đã giết Krillin!!"</span>);', start: 16, end: 20, goku: 'Ngươi đã giết Krillin!!' },
+      { num: 9, html: '<span class="vr">frieza</span>.<span class="fn">say</span>(<span class="str">"Ta sẽ hủy diệt cả hành tinh này!"</span>);', start: 20, end: 24, frieza: 'Ta sẽ hủy diệt cả hành tinh này!' },
+      { num: 10, html: '' },
+      { num: 11, html: '<span class="kw">while</span> (<span class="vr">frieza</span>.<span class="vr">hp</span> > <span class="num">0</span>) {', start: 24, end: 26 },
+      { num: 12, html: '  <span class="kw">await</span> <span class="vr">goku</span>.<span class="fn">dashAttack</span>(<span class="vr">frieza</span>);', start: 26, end: 32, action: 'combat_dash' },
+      { num: 13, html: '  <span class="kw">await</span> <span class="fn">clash</span>(<span class="vr">goku</span>.<span class="vr">power</span>, <span class="vr">frieza</span>.<span class="vr">power</span>);', start: 32, end: 38, action: 'combat_clash' },
+      { num: 14, html: '  <span class="vr">frieza</span>.<span class="fn">counterAttack</span>();', start: 38, end: 44, action: 'frieza_attack' },
+      { num: 15, html: '' },
+      { num: 16, html: '  <span class="kw">if</span> (<span class="vr">goku</span>.<span class="vr">rage</span> >= <span class="num">100</span>) {', start: 44, end: 48 },
+      { num: 17, html: '    <span class="vr">goku</span>.<span class="fn">cast</span>(<span class="str">"KAMEHAMEHA"</span>);', start: 48, end: 55, action: 'kamehameha', goku: 'KAME... HAME... HA!' },
+      { num: 18, html: '    <span class="vr">frieza</span>.<span class="fn">cast</span>(<span class="str">"DEATH BALL"</span>);', start: 55, end: 60, action: 'death_ball', frieza: 'Chết đi con khỉ!!' },
+      { num: 19, html: '    <span class="kw">await</span> <span class="fn">beamStruggle</span>();', start: 60, end: 72, action: 'beam_struggle' },
+      { num: 20, html: '  }', start: 72, end: 74 },
+      { num: 21, html: '}' },
+      { num: 22, html: '<span class="fn">destroyPlanet</span>(<span class="str">"Namek"</span>);', start: 74, end: 80, action: 'explosion' }
+    ];
+
+    const container = document.getElementById('codeContainer');
+    codeLines.forEach((item, index) => {
+      const lineDiv = document.createElement('div');
+      lineDiv.className = 'code-line';
+      lineDiv.id = `line-${index}`;
+      lineDiv.innerHTML = `<span class="pointer">▶</span><span class="line-num">${item.num}</span><span class="code-text">${item.html}</span>`;
+      container.appendChild(lineDiv);
+    });
+
+    const canvas = document.getElementById('pixelCanvas');
+    const ctx = canvas.getContext('2d');
+    const sceneWidth = 320;
+    let sceneHeight = 180;
+    let viewScale = 1;
+    let gokuX = 54;
+    let friezaX = 266;
+    let currentAction = 'idle';
+    let battleTime = 0;
+    let animationTime = 0;
+    let lastFrameTime = 0;
+
+    function resizeCanvas() {
+      const bounds = canvas.getBoundingClientRect();
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.max(1, Math.round(bounds.width * pixelRatio));
+      canvas.height = Math.max(1, Math.round(bounds.height * pixelRatio));
+      viewScale = bounds.width / sceneWidth || 1;
+      sceneHeight = bounds.height / viewScale || 180;
+      ctx.setTransform(pixelRatio * viewScale, 0, 0, pixelRatio * viewScale, 0, 0);
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawLimb(startX, startY, endX, endY, color, width) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#26364c';
+      ctx.lineWidth = width + 2;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(endX, endY, width * 0.58, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function blendColor(from, to, progress) {
+      const channels = from.map((channel, index) => Math.round(channel + (to[index] - channel) * progress));
+      return `rgba(${channels.join(',')},ALPHA)`;
+    }
+
+    function drawAura(x, y, color, time, strength) {
+      const pulse = 1 + Math.sin(time * 12) * 0.12;
+      const glow = ctx.createRadialGradient(x, y, 5, x, y, 42 * pulse);
+      glow.addColorStop(0, color.replace('ALPHA', '0.48'));
+      glow.addColorStop(0.58, color.replace('ALPHA', '0.24'));
+      glow.addColorStop(1, color.replace('ALPHA', '0'));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      const spikeCount = 22;
+      for (let point = 0; point < spikeCount * 2; point++) {
+        const angle = -Math.PI / 2 + point * Math.PI / spikeCount;
+        const spike = point % 2 === 0;
+        const flicker = 0.65 + (Math.sin(time * 15 + point * 2.3) + 1) * 0.175;
+        const radiusX = spike ? 25 + flicker * 10 : 21 + Math.sin(time * 8 + point) * 2;
+        const radiusY = spike ? 35 + flicker * 17 : 29 + Math.sin(time * 9 + point) * 3;
+        const pointX = x + Math.cos(angle) * radiusX * pulse;
+        const pointY = y + Math.sin(angle) * radiusY * pulse;
+        if (point === 0) ctx.moveTo(pointX, pointY);
+        else ctx.lineTo(pointX, pointY);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = color.replace('ALPHA', '0.82');
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      ctx.strokeStyle = color.replace('ALPHA', String(0.55 + strength * 0.3));
+      ctx.lineWidth = 2.5;
+      for (let ray = 0; ray < 9; ray++) {
+        const angle = time * 3.4 + ray * Math.PI * 2 / 9;
+        const inner = 25 + Math.sin(time * 7 + ray) * 3;
+        const outer = inner + 10 + Math.sin(time * 6 + ray * 1.7) * 5;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner);
+        ctx.lineTo(x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+    }
+
+    function drawGoku(x, y, pose, time, transformation) {
+      const firing = pose === 'kamehameha' || pose === 'beam_struggle';
+      const lunging = pose === 'combat_dash' || pose === 'combat_clash';
+      ctx.save();
+      ctx.translate(x, y + Math.sin(time * 2.1) * 3);
+      ctx.rotate(lunging ? Math.sin(time * 8) * 0.13 : Math.sin(time * 2) * 0.025);
+
+      if (pose === 'ssj_aura' || firing || pose === 'combat_clash') {
+        const auraColor = pose === 'ssj_aura'
+          ? blendColor([243, 249, 255], [255, 214, 48], transformation)
+          : 'rgba(255,214,48,ALPHA)';
+        drawAura(0, 0, auraColor, time, firing ? 1 : 0.45);
+      }
+
+      const stride = lunging ? Math.sin(time * 14) * 5 : Math.sin(time * 3) * 1.5;
+      drawLimb(-5, 15, -12 - stride, 27, '#1769aa', 5);
+      drawLimb(5, 15, 10 + stride, 26, '#1769aa', 5);
+      ctx.fillStyle = '#162d47';
+      ctx.beginPath(); ctx.ellipse(-12 - stride, 29, 6, 3, -0.15, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(10 + stride, 28, 6, 3, 0.1, 0, Math.PI * 2); ctx.fill();
+
+      if (firing) {
+        drawLimb(5, -5, 23, -5 + Math.sin(time * 4) * 1.5, '#f2bb8e', 5);
+        drawLimb(3, 3, 20, 1 + Math.sin(time * 4) * 1.5, '#f2bb8e', 5);
+      } else if (lunging) {
+        drawLimb(5, -5, 21, -9, '#f2bb8e', 5);
+        drawLimb(3, 4, 13, 11, '#f2bb8e', 5);
+      } else {
+        drawLimb(-6, -3, -14, 7 + Math.sin(time * 3) * 2, '#f2bb8e', 5);
+        drawLimb(6, -3, 13, 6 - Math.sin(time * 3) * 2, '#f2bb8e', 5);
+      }
+
+      ctx.fillStyle = '#58251f';
+      ctx.beginPath(); ctx.moveTo(-7, -11); ctx.lineTo(7, -11); ctx.lineTo(11, -5); ctx.lineTo(7, 12); ctx.lineTo(5, 19); ctx.lineTo(-6, 19); ctx.lineTo(-9, 10); ctx.lineTo(-11, -5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#e65b31';
+      ctx.beginPath(); ctx.moveTo(-6, -10); ctx.lineTo(6, -10); ctx.lineTo(9, -4); ctx.lineTo(6, 11); ctx.lineTo(4, 17); ctx.lineTo(-5, 17); ctx.lineTo(-8, 9); ctx.lineTo(-9, -4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,181,75,0.6)';
+      ctx.beginPath(); ctx.moveTo(-5, -8); ctx.lineTo(0, -8); ctx.lineTo(-3, 7); ctx.lineTo(-7, 6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#1681cb';
+      ctx.fillRect(-8, 10, 16, 4);
+      ctx.fillRect(-9, 17, 7, 4);
+      ctx.fillRect(2, 17, 7, 4);
+      ctx.fillStyle = '#164d82';
+      ctx.beginPath(); ctx.roundRect(-10, -11, 20, 5, 2); ctx.fill();
+
+      ctx.fillStyle = '#f4c59d';
+      ctx.beginPath(); ctx.moveTo(-5, -21); ctx.lineTo(7, -23); ctx.lineTo(11, -17); ctx.lineTo(9, -11); ctx.lineTo(2, -8); ctx.lineTo(-4, -12); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#e6ad83';
+      ctx.beginPath(); ctx.moveTo(8, -16); ctx.lineTo(12, -14); ctx.lineTo(8, -12); ctx.fill();
+      ctx.fillStyle = '#20242c';
+      ctx.beginPath(); ctx.ellipse(7, -17, 1.4, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#a84c43'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(7, -10); ctx.lineTo(10, -10); ctx.stroke();
+
+      const hair = ctx.createLinearGradient(-8, -35, 9, -15);
+      hair.addColorStop(0, blendColor([76, 74, 83], [255, 244, 161], transformation).replace('ALPHA', '1'));
+      hair.addColorStop(0.55, blendColor([28, 25, 34], [255, 194, 28], transformation).replace('ALPHA', '1'));
+      hair.addColorStop(1, blendColor([13, 13, 19], [219, 103, 19], transformation).replace('ALPHA', '1'));
+      ctx.fillStyle = hair;
+      ctx.beginPath();
+      ctx.moveTo(-5, -20); ctx.lineTo(-13, -30); ctx.lineTo(-6, -28);
+      ctx.lineTo(-8, -39); ctx.lineTo(0, -31); ctx.lineTo(3, -43);
+      ctx.lineTo(7, -31); ctx.lineTo(14, -37); ctx.lineTo(12, -26);
+      ctx.lineTo(8, -20); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = blendColor([10, 10, 16], [189, 120, 25], transformation).replace('ALPHA', '1'); ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawFrieza(x, y, pose, time, transformation) {
+      const casting = pose === 'death_ball' || pose === 'frieza_attack' || pose === 'beam_struggle';
+      const armor = 1 - transformation;
+      ctx.save();
+      ctx.translate(x, y + Math.cos(time * 2.1) * 3);
+      ctx.scale(-1, 1);
+      ctx.scale(1 + transformation * 0.22, 1 + transformation * 0.04);
+      ctx.rotate(pose === 'frieza_attack' ? -0.08 : Math.sin(time * 2 + 1) * 0.02);
+
+      if (pose === 'frieza_aura' || casting || pose === 'combat_clash') {
+        const auraColor = pose === 'frieza_aura'
+          ? blendColor([244, 248, 255], [190, 64, 255], transformation)
+          : 'rgba(190,64,255,ALPHA)';
+        drawAura(0, 0, auraColor, time + 0.7, casting ? 0.9 : 0.4);
+      }
+
+      ctx.strokeStyle = '#e8edf7'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-7, 8); ctx.bezierCurveTo(-21, 14, -25, 31, -12 + Math.sin(time * 2) * 4, 34); ctx.stroke();
+      ctx.fillStyle = '#f5f6ff'; ctx.beginPath(); ctx.ellipse(-12 + Math.sin(time * 2) * 4, 34, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+
+      const stride = Math.sin(time * (pose === 'combat_dash' ? 14 : 3)) * (pose === 'combat_dash' ? 5 : 1);
+      drawLimb(-5, 13, -9 - stride, 26, '#f1f2ff', 4.5);
+      drawLimb(5, 13, 10 + stride, 25, '#f1f2ff', 4.5);
+      ctx.fillStyle = '#a749d0';
+      ctx.beginPath(); ctx.ellipse(-10 - stride, 27, 5, 2.5, -0.15, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(10 + stride, 26, 5, 2.5, 0.1, 0, Math.PI * 2); ctx.fill();
+
+      if (casting) {
+        drawLimb(5, -5, 22, -9, '#f0c8d9', 4.5);
+        drawLimb(3, 2, 18, -2, '#f0c8d9', 4.5);
+      } else if (pose === 'combat_dash') {
+        drawLimb(5, -5, 20, -11, '#f0c8d9', 4.5);
+        drawLimb(-5, 0, -15, 8, '#f0c8d9', 4.5);
+      } else {
+        drawLimb(-6, -3, -14, 5, '#f0c8d9', 4.5);
+        drawLimb(6, -3, 14, 5, '#f0c8d9', 4.5);
+      }
+
+      ctx.fillStyle = '#d9dce6';
+      ctx.beginPath(); ctx.moveTo(-7, -11); ctx.lineTo(7, -11); ctx.lineTo(11, -3); ctx.lineTo(8, 11); ctx.lineTo(4, 17); ctx.lineTo(-5, 15); ctx.lineTo(-10, 7); ctx.lineTo(-9, -3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#7b718d'; ctx.lineWidth = 1.7; ctx.stroke();
+      ctx.fillStyle = '#65247f';
+      ctx.beginPath(); ctx.ellipse(0, 2, 5.5, 9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c351ef';
+      ctx.beginPath(); ctx.ellipse(0, -3, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+      if (armor > 0.02) {
+        ctx.save();
+        ctx.globalAlpha = armor;
+        ctx.fillStyle = '#b9c6d5';
+        ctx.strokeStyle = '#596b80';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-10, -8); ctx.lineTo(-15, -12); ctx.lineTo(-19, -8); ctx.lineTo(-16, -1); ctx.lineTo(-9, 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(10, -8); ctx.lineTo(15, -12); ctx.lineTo(19, -8); ctx.lineTo(16, -1); ctx.lineTo(9, 1); ctx.closePath(); ctx.fill(); ctx.stroke();
+        const chestPlate = ctx.createLinearGradient(-8, -8, 8, 10);
+        chestPlate.addColorStop(0, '#edf4fa'); chestPlate.addColorStop(0.5, '#8e9eb4'); chestPlate.addColorStop(1, '#53657d');
+        ctx.fillStyle = chestPlate;
+        ctx.beginPath(); ctx.moveTo(-8, -9); ctx.lineTo(8, -9); ctx.lineTo(10, -3); ctx.lineTo(6, 8); ctx.lineTo(0, 11); ctx.lineTo(-6, 8); ctx.lineTo(-10, -3); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#763a9c';
+        ctx.beginPath(); ctx.moveTo(-3, -5); ctx.lineTo(3, -5); ctx.lineTo(4, -1); ctx.lineTo(0, 3); ctx.lineTo(-4, -1); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+
+      for (let shard = 0; shard < 4; shard++) {
+        const delay = shard * 0.12;
+        const flight = Math.max(0, Math.min((transformation - delay) / 0.42, 1));
+        if (flight > 0 && flight < 1) {
+          ctx.save();
+          ctx.globalAlpha = 1 - flight;
+          ctx.translate((shard % 2 ? 1 : -1) * (9 + flight * 22), -8 + (shard - 1.5) * flight * 16);
+          ctx.rotate((shard % 2 ? 1 : -1) * flight * 1.8);
+          ctx.fillStyle = '#d9e5f2';
+          ctx.strokeStyle = '#596b80';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(-4, -5); ctx.lineTo(5, -3); ctx.lineTo(3, 5); ctx.lineTo(-3, 3); ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      ctx.fillStyle = '#e0dce8';
+      ctx.beginPath(); ctx.moveTo(-4, -24); ctx.lineTo(6, -25); ctx.lineTo(11, -19); ctx.lineTo(8, -11); ctx.lineTo(0, -9); ctx.lineTo(-6, -15); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#682282';
+      ctx.beginPath(); ctx.moveTo(-4, -22); ctx.lineTo(-8, -28); ctx.lineTo(2, -26); ctx.lineTo(8, -29); ctx.lineTo(10, -21); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#2a2640';
+      ctx.beginPath(); ctx.ellipse(7, -17, 1.4, 1.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#d43f6b'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(5, -19); ctx.lineTo(10, -18); ctx.stroke();
+      ctx.strokeStyle = '#a84d77'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(7, -12); ctx.lineTo(10, -13); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawNamekTree(x, base, size, time) {
+      const sway = Math.sin(time * 0.7 + x) * size * 1.5;
+      ctx.strokeStyle = '#645b48'; ctx.lineWidth = 5 * size; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x, base); ctx.quadraticCurveTo(x + sway, base - 12 * size, x + sway * 0.6, base - 25 * size); ctx.stroke();
+      for (let leaf = 0; leaf < 4; leaf++) {
+        const angle = leaf * Math.PI / 2 + time * 0.15;
+        const leafX = x + sway * 0.6 + Math.cos(angle) * 11 * size;
+        const leafY = base - 25 * size + Math.sin(angle) * 7 * size;
+        ctx.fillStyle = leaf % 2 ? '#582536' : '#8c2c34';
+        ctx.beginPath(); ctx.ellipse(leafX, leafY, 9 * size, 6 * size, angle, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,126,67,0.35)';
+        ctx.beginPath(); ctx.ellipse(leafX - 2 * size, leafY - 2 * size, 3 * size, 1.5 * size, angle, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function drawBeam(startX, endX, y, type, time) {
+      const beamWidth = 7 + Math.sin(time * 24) * 1.5;
+      const beamColor = type === 'kame' ? ['#e8ffff', '#57ddff', '#1884ff'] : ['#fff1ff', '#dd8cff', '#8a2fe0'];
+      const gradient = ctx.createLinearGradient(startX, y, endX, y);
+      gradient.addColorStop(0, beamColor[0]);
+      gradient.addColorStop(0.45, beamColor[1]);
+      gradient.addColorStop(1, beamColor[2]);
+      ctx.save();
+      ctx.shadowColor = beamColor[1]; ctx.shadowBlur = 16;
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.roundRect(startX, y - beamWidth / 2, Math.max(0, endX - startX), beamWidth, beamWidth / 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawScene(timestamp = 0) {
+      const delta = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 1000, 0.05) : 0;
+      lastFrameTime = timestamp;
+      animationTime += delta;
+      const time = animationTime;
+      const horizon = sceneHeight * 0.73;
+      const ground = sceneHeight * 0.82;
+      const gokuY = ground - 43;
+      const friezaY = ground - 43;
+      const gokuProgress = Math.max(0, Math.min((battleTime - 8) / 4, 1));
+      const friezaProgress = Math.max(0, Math.min((battleTime - 12) / 4, 1));
+      const gokuEase = gokuProgress * gokuProgress * (3 - 2 * gokuProgress);
+      const friezaEase = friezaProgress * friezaProgress * (3 - 2 * friezaProgress);
+
+      ctx.save();
+      const shake = currentAction === 'beam_struggle' ? 2.5 : currentAction === 'combat_clash' ? 1.7 : currentAction === 'combat_dash' ? 0.7 : 0;
+      ctx.translate(Math.sin(time * 37) * shake, Math.cos(time * 43) * shake * 0.6);
+      if (currentAction === 'ssj_aura' || currentAction === 'frieza_aura') {
+        const focusX = currentAction === 'ssj_aura' ? 54 : 266;
+        const zoom = 1 + Math.sin((currentAction === 'ssj_aura' ? gokuProgress : friezaProgress) * Math.PI) * 0.42;
+        ctx.translate(sceneWidth / 2, sceneHeight * 0.48);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-focusX, -sceneHeight * 0.48);
+      }
+
+      const sky = ctx.createLinearGradient(0, 0, 0, horizon + 30);
+      sky.addColorStop(0, '#060b14'); sky.addColorStop(0.52, '#17252d'); sky.addColorStop(0.82, '#543026'); sky.addColorStop(1, '#a04e2c');
+      ctx.fillStyle = sky; ctx.fillRect(0, 0, sceneWidth, sceneHeight);
+
+      for (let star = 0; star < 18; star++) {
+        const sx = (star * 83 + 17) % sceneWidth;
+        const sy = 9 + (star * 37) % Math.max(30, horizon * 0.48);
+        const alpha = 0.15 + (Math.sin(time * 1.4 + star) + 1) * 0.17;
+        ctx.fillStyle = `rgba(255,255,225,${alpha})`;
+        ctx.beginPath(); ctx.arc(sx, sy, star % 3 === 0 ? 1.3 : 0.7, 0, Math.PI * 2); ctx.fill();
+      }
+
+      const planetX = 267 + Math.sin(time * 0.12) * 2;
+      const planetY = Math.max(33, horizon * 0.24);
+      const planetGlow = ctx.createRadialGradient(planetX - 8, planetY - 8, 2, planetX, planetY, 29);
+      planetGlow.addColorStop(0, '#ffd4a0'); planetGlow.addColorStop(0.35, '#c74735'); planetGlow.addColorStop(0.75, '#622535'); planetGlow.addColorStop(1, '#171923');
+      ctx.fillStyle = planetGlow;
+      ctx.beginPath(); ctx.arc(planetX, planetY, 25, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,112,71,0.72)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(planetX, planetY + 2, 34, 8, -0.18, Math.PI, Math.PI * 2); ctx.stroke();
+
+      for (let cloud = 0; cloud < 3; cloud++) {
+        const cx = ((cloud * 137 + time * (3 + cloud)) % (sceneWidth + 90)) - 45;
+        const cy = horizon * (0.28 + cloud * 0.12);
+        ctx.fillStyle = 'rgba(113,128,139,0.22)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 19, 4, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx - 8, cy + 1, 8, 3, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + 8, cy + 1, 10, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = '#35454b';
+      ctx.beginPath(); ctx.moveTo(0, horizon + 17);
+      ctx.lineTo(37, horizon - 30); ctx.lineTo(78, horizon + 5); ctx.lineTo(123, horizon - 52);
+      ctx.lineTo(177, horizon + 8); ctx.lineTo(226, horizon - 43); ctx.lineTo(278, horizon + 4);
+      ctx.lineTo(320, horizon - 25); ctx.lineTo(320, ground); ctx.lineTo(0, ground); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#27383d';
+      ctx.beginPath(); ctx.moveTo(0, horizon + 37); ctx.lineTo(48, horizon + 1); ctx.lineTo(101, horizon + 31);
+      ctx.lineTo(155, horizon - 6); ctx.lineTo(207, horizon + 32); ctx.lineTo(264, horizon + 1);
+      ctx.lineTo(320, horizon + 28); ctx.lineTo(320, ground + 9); ctx.lineTo(0, ground + 9); ctx.closePath(); ctx.fill();
+
+      ctx.fillStyle = '#182b2d';
+      ctx.beginPath(); ctx.moveTo(0, ground - 5);
+      ctx.quadraticCurveTo(78, ground - 28, 145, ground - 7);
+      ctx.quadraticCurveTo(226, ground + 11, 320, ground - 15);
+      ctx.lineTo(320, sceneHeight); ctx.lineTo(0, sceneHeight); ctx.closePath(); ctx.fill();
+
+      const water = ctx.createLinearGradient(100, ground - 12, 235, ground + 15);
+      water.addColorStop(0, 'rgba(84,147,155,0.88)'); water.addColorStop(1, 'rgba(19,55,78,0.98)');
+      ctx.fillStyle = water;
+      ctx.beginPath(); ctx.moveTo(94, ground - 11);
+      ctx.quadraticCurveTo(149, ground - 21, 190, ground - 8);
+      ctx.quadraticCurveTo(236, ground + 5, 263, ground - 3);
+      ctx.lineTo(258, sceneHeight); ctx.lineTo(106, sceneHeight); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(176,211,204,0.5)'; ctx.lineWidth = 1.4;
+      for (let ripple = 0; ripple < 4; ripple++) {
+        const rx = 115 + ((ripple * 39 + time * 12) % 125);
+        const ry = ground + 5 + ripple * 5;
+        ctx.beginPath(); ctx.ellipse(rx, ry, 8 + ripple, 1.4, 0, 0, Math.PI); ctx.stroke();
+      }
+
+      drawNamekTree(24, ground - 5, 0.72, time);
+      drawNamekTree(82, ground - 15, 0.46, time + 1);
+      drawNamekTree(286, ground - 12, 0.55, time + 2);
+      drawNamekTree(311, ground - 3, 0.8, time + 0.5);
+
+      ctx.fillStyle = 'rgba(232,144,94,0.42)';
+      for (let grass = 0; grass < 24; grass++) {
+        const gx = (grass * 47 + 8) % sceneWidth;
+        const gy = ground + 4 + (grass * 13) % Math.max(8, sceneHeight - ground - 7);
+        ctx.beginPath(); ctx.ellipse(gx, gy, 1.2, 2.5, Math.sin(time + grass) * 0.25, 0, Math.PI * 2); ctx.fill();
+      }
+
+      const dash = currentAction === 'combat_dash';
+      const clash = currentAction === 'combat_clash';
+      if (dash) {
+        gokuX = 137 + Math.sin(time * 9) * 25;
+        friezaX = 183 + Math.cos(time * 9) * 25;
+      } else if (clash) {
+        gokuX = 139; friezaX = 181;
+      } else if (currentAction === 'frieza_attack') {
+        gokuX = 74; friezaX = 218;
+      } else {
+        const smoothing = 1 - Math.exp(-delta * 8);
+        gokuX += (54 - gokuX) * smoothing;
+        friezaX += (266 - friezaX) * smoothing;
+      }
+
+      if (dash || currentAction === 'frieza_attack' || currentAction === 'kamehameha') {
+        const speedColor = currentAction === 'kamehameha' ? 'rgba(120,220,255,0.32)' : 'rgba(255,110,61,0.34)';
+        ctx.strokeStyle = speedColor;
+        ctx.lineWidth = 1.5;
+        for (let streak = 0; streak < 9; streak++) {
+          const streakY = ((streak * 29 + time * 95) % sceneHeight);
+          const streakX = (streak * 53 + 19) % sceneWidth;
+          ctx.beginPath();
+          ctx.moveTo(streakX, streakY);
+          ctx.lineTo(streakX - 12 - streak % 4 * 5, streakY + 2);
+          ctx.stroke();
+        }
+      }
+
+      if (clash) {
+        const flash = 0.12 + (Math.sin(time * 23) + 1) * 0.12;
+        const impact = ctx.createRadialGradient(160, gokuY - 5, 2, 160, gokuY - 5, 38);
+        impact.addColorStop(0, `rgba(255,255,245,${flash + 0.25})`);
+        impact.addColorStop(0.45, `rgba(255,221,139,${flash})`);
+        impact.addColorStop(1, 'rgba(255,180,80,0)');
+        ctx.fillStyle = impact; ctx.beginPath(); ctx.arc(160, gokuY - 5, 38, 0, Math.PI * 2); ctx.fill();
+      }
+
+      drawGoku(gokuX, gokuY, currentAction, time, gokuEase);
+      drawFrieza(friezaX, friezaY, currentAction, time, friezaEase);
+
+      if (currentAction === 'kamehameha') {
+        drawBeam(gokuX + 23, friezaX - 16, gokuY - 5, 'kame', time);
+      } else if (currentAction === 'death_ball') {
+        const ballX = friezaX - 19;
+        const ballY = friezaY - 29;
+        const ballGlow = ctx.createRadialGradient(ballX, ballY, 2, ballX, ballY, 18 + Math.sin(time * 8) * 2);
+        ballGlow.addColorStop(0, '#fff4ff'); ballGlow.addColorStop(0.3, '#d880ff'); ballGlow.addColorStop(1, 'rgba(134,38,203,0)');
+        ctx.fillStyle = ballGlow; ctx.beginPath(); ctx.arc(ballX, ballY, 19, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#dca1ff'; ctx.beginPath(); ctx.arc(ballX, ballY, 7, 0, Math.PI * 2); ctx.fill();
+      } else if (currentAction === 'beam_struggle') {
+        const clashPoint = 158 + Math.sin(time * 2.4) * 18;
+        drawBeam(gokuX + 23, clashPoint, gokuY - 5, 'kame', time);
+        drawBeam(clashPoint, friezaX - 19, friezaY - 5, 'death', time);
+        const burst = ctx.createRadialGradient(clashPoint, gokuY - 5, 1, clashPoint, gokuY - 5, 26 + Math.sin(time * 11) * 4);
+        burst.addColorStop(0, '#fff'); burst.addColorStop(0.3, 'rgba(255,244,198,0.92)'); burst.addColorStop(1, 'rgba(255,200,115,0)');
+        ctx.fillStyle = burst; ctx.beginPath(); ctx.arc(clashPoint, gokuY - 5, 30, 0, Math.PI * 2); ctx.fill();
+      } else if (currentAction === 'explosion') {
+        const progress = Math.max(0, Math.min((battleTime - 74) / 6, 1));
+        const easedProgress = progress * progress * (3 - 2 * progress);
+        const radius = 10 + easedProgress * Math.max(sceneWidth, sceneHeight) * 0.8;
+        const flash = ctx.createRadialGradient(160, ground - 30, 2, 160, ground - 30, radius);
+        flash.addColorStop(0, `rgba(255,255,242,${0.35 + easedProgress * 0.65})`);
+        flash.addColorStop(0.35, `rgba(255,202,135,${0.25 * (1 - easedProgress)})`);
+        flash.addColorStop(1, 'rgba(255,83,47,0)');
+        ctx.fillStyle = flash; ctx.beginPath(); ctx.arc(160, ground - 30, radius, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = easedProgress === 1 ? '#fff' : `rgba(255,249,232,${easedProgress})`;
+        ctx.fillRect(0, 0, sceneWidth, sceneHeight);
+      }
+
+      ctx.restore();
+      requestAnimationFrame(drawScene);
+    }
+
+    requestAnimationFrame(drawScene);
+
+    // 3. ĐỒNG BỘ ÂM THANH & TRẠNG THÁI
+    const audio = document.getElementById('audioTrack');
+    const bubbleGoku = document.getElementById('bubbleGoku');
+    const bubbleFrieza = document.getElementById('bubbleFrieza');
+    let fallbackMode = false;
+    let fallbackTimer = null;
+    let fallbackTime = 0;
+
+    function updateBattle(cur) {
+      battleTime = cur;
+      const musicNote = fallbackMode ? ' (no audio)' : '';
+      document.getElementById('timeTracker').innerText = `${Math.floor(cur/60)}:${Math.floor(cur%60).toString().padStart(2,'0')} / 1:20${musicNote}`;
+
+      let activeGokuMsg = null, activeFriezaMsg = null;
+      currentAction = 'idle';
+
+      codeLines.forEach((item, index) => {
+        const lineEl = document.getElementById(`line-${index}`);
+        if (item.start !== undefined && cur >= item.start && cur < item.end) {
+          lineEl.classList.add('active');
+          lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (item.action) currentAction = item.action;
+          if (item.goku) activeGokuMsg = item.goku;
+          if (item.frieza) activeFriezaMsg = item.frieza;
+        } else {
+          lineEl.classList.remove('active');
+        }
+      });
+      if (cur >= 80) currentAction = 'explosion';
+
+      if (activeGokuMsg) { bubbleGoku.innerText = activeGokuMsg; bubbleGoku.classList.add('show'); } 
+      else { bubbleGoku.classList.remove('show'); }
+      
+      if (activeFriezaMsg) { bubbleFrieza.innerText = activeFriezaMsg; bubbleFrieza.classList.add('show'); } 
+      else { bubbleFrieza.classList.remove('show'); }
+    }
+
+    audio.addEventListener('timeupdate', () => updateBattle(audio.currentTime));
+    audio.addEventListener('error', () => { fallbackMode = true; });
+
+    function startFallback() {
+      if (fallbackTime >= 80) {
+        fallbackTime = 0;
+        updateBattle(fallbackTime);
+      }
+      fallbackTimer = window.setInterval(() => {
+        fallbackTime = Math.min(fallbackTime + 0.1, 80);
+        updateBattle(fallbackTime);
+        if (fallbackTime >= 80) {
+          window.clearInterval(fallbackTimer);
+          fallbackTimer = null;
+        }
+      }, 100);
+    }
+
+    function togglePlayback() {
+      if (fallbackMode) {
+        if (fallbackTimer !== null) {
+          window.clearInterval(fallbackTimer);
+          fallbackTimer = null;
+        } else {
+          startFallback();
+        }
+      } else if (audio.paused) {
+        audio.play().catch(() => {
+          fallbackMode = true;
+          startFallback();
+        });
+      } else {
+        audio.pause();
+      }
+    }
+
+    // Play / Pause
+    document.getElementById('playBtn').addEventListener('click', togglePlayback);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') { e.preventDefault(); togglePlayback(); }
+    });
+  </script>
+</body>
+</html>
